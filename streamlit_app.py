@@ -1,62 +1,70 @@
 import pandas as pd
 import streamlit as st
-import pyttsx3
+from gtts import gTTS
+import os
 
-# Streamlit app setup
-st.title("Wire Detail Search")
-speaker = pyttsx3.init()
-speaker.setProperty('rate', 95)
+# Load the Excel file
+@st.cache
+def load_data(file_path):
+    return pd.read_excel(file_path)
 
-# Initialize or update persistent session state for search history
-if 'search_history' not in st.session_state:
-    st.session_state.search_history = []
+df = load_data('C:/wireproject/.venv/WIRE_DETAIL.xlsx')
 
-# Display searched wire names in sidebar
-st.sidebar.write("Wires you have searched:")
-for item in st.session_state.search_history:
-    st.sidebar.write(item)
+# Streamlit user interface for input
+wir_input = st.text_input("Enter the Wire ID (Wir) to search: ").upper()
 
-# File uploader for Excel file
-uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    search_text = st.text_input("Enter the wire name:", key="wirename")
+if wir_input:
+    # Find the rows that match the 'Wir' input
+    matching_rows = df[df['Wir'].astype(str) == wir_input]
 
-    if search_text:
-        normalized_search_text = search_text.strip().upper()
-        if normalized_search_text and normalized_search_text not in st.session_state.search_history:
-            st.session_state.search_history.append(normalized_search_text)
+    # Check if there's at least one match
+    if not matching_rows.empty:
+        # Iterate over each matching row
+        for index, row in matching_rows.iterrows():
+            # Select specific columns and rename for clear text output
+            selected_data = row[['siz', 'Cir', 'Wir', 'Eq.F', 'Ter-F', 'Eq.T', 'Ter-T']].fillna('Missing')
+            selected_data.index = ['Size', 'Color', 'Wire Number', 'Starting Equipment', 'Terminal', 'Ending Equipment', 'Terminal']
 
-        # Perform search only within the 'Wir' column
-        matches = df[df['Wir'].astype(str).str.upper().str.contains(normalized_search_text, na=False)]
+            # Convert the series to a string with descriptive labels
+            text_to_speak = '. '.join([f"{idx} {val}" for idx, val in selected_data.items()])
 
-        if not matches.empty:
-            match_index = st.number_input("Select match index:", min_value=0, max_value=len(matches) - 1, step=1)
-            match = matches.iloc[match_index]
-            color_map = {'GY': 'gray', 'BL': 'black', 'B': 'blue', 'R': 'red'}
-            color = color_map.get(match['Cir'], match['Cir'])  # Default to original if not mapped
+            # Replace specific abbreviations or terms for correct pronunciation
+            replacements = {
+                'GY': 'Grey',
+                'siz': 'size',
+                'Cir': 'color',
+                'Wir': 'wire number',
+                'Eq.F': 'starting equipment',
+                'Ter-F': 'terminal',
+                'Eq.T': 'ending equipment',
+                'Ter-T': 'terminal'
+            }
+            for key, value in replacements.items():
+                text_to_speak = text_to_speak.replace(key, value)
 
-            # Display wire details
-            st.write(f"S.No: {match['S.N']}")
-            st.write(f"Size: {match['siz']}")
-            st.write(f"Color: {color}")
-            st.write(f"Wire Name: {match['Wir']}")
-            st.write(f"Starting Equipment: {match['Eq.F']}")
-            st.write(f"Terminal 1: {match['Ter-F']}")
-            st.write(f"Ending Equipment: {match['Eq.T']}")
-            st.write(f"Terminal 2: {match['Ter-T']}")
+            # Display selected data as a table in Streamlit
+            st.write(selected_data.to_frame().T)
 
-            # Speaking functionality
-            details = f"Serial Number {match['S.N']}, Size {match['siz']}, Color {color}, Wire {match['Wir']}, Starting equipment {match['Eq.F']}, Terminal {match['Ter-F']}, Ending equipment {match['Eq.T']}, Terminal {match['Ter-T']}"
-            st.write(details)
-            speaker.say(details)
+            # Language for the TTS
+            language = 'en'
 
-            if len(matches) > 1:
-                speaker.say("Another wire named {0} found. Click plus to proceed.".format(match['Wir']))
-            speaker.runAndWait()
-        else:
-            st.write("No matches found.")
-            speaker.say("No matches found.")
-            speaker.runAndWait()
+            # Create the gTTS object
+            tts = gTTS(text=text_to_speak, lang=language, slow=False)
 
+            # Save the spoken text to an MP3 file
+            audio_file_path = f'wir_details_audio_{index}.mp3'
+            tts.save(audio_file_path)
 
+            # Provide download link for the audio file
+            with open(audio_file_path, "rb") as file:
+                btn = st.download_button(
+                    label="Download audio file",
+                    data=file,
+                    file_name=audio_file_path,
+                    mime="audio/mp3"
+                )
+
+            # Optionally, display a button to play the audio directly in the browser
+            st.audio(audio_file_path)
+    else:
+        st.write("No matching entry found for Wir:", wir_input)
