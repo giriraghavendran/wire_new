@@ -24,7 +24,8 @@ if uploaded_file is not None:
         if not matching_rows.empty:
             for index, row in matching_rows.iterrows():
                 selected_data = row[['siz', 'Cir', 'Wir', 'Eq.F', 'Ter-F', 'Eq.T', 'Ter-T']].fillna('Missing')
-                selected_data.index = ['Size', 'Color', 'Wire Number', 'Starting Equipment', 'Terminal', 'Ending Equipment', 'Terminal']
+                # Rename the index to ensure each name is unique
+                selected_data.index = ['Size', 'Color', 'Wire Number', 'Starting Equipment', 'Terminal From', 'Ending Equipment', 'Terminal To']
 
                 text_to_speak = '. '.join([f"{idx} {val}" for idx, val in selected_data.items()])
                 replacements = {
@@ -33,9 +34,9 @@ if uploaded_file is not None:
                     'Cir': 'color',
                     'Wir': 'wire number',
                     'Eq.F': 'starting equipment',
-                    'Ter-F': 'terminal',
+                    'Ter-F': 'terminal from',
                     'Eq.T': 'ending equipment',
-                    'Ter-T': 'terminal'
+                    'Ter-T': 'terminal to'
                 }
                 for key, value in replacements.items():
                     text_to_speak = text_to_speak.replace(key, value)
